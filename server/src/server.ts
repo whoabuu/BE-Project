@@ -41,9 +41,8 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   res.status(500).json({ message: "Internal server error" });
 });
 
-const server = app.listen(port, () => {
+const server = app.listen(port, async () => {
   console.log(`TalentBridge API running at http://localhost:${port}`);
-  console.log(`Health check: http://localhost:${port}/health`);
 });
 
 async function shutdown(signal: string): Promise<void> {

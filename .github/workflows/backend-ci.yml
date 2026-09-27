@@ -18,6 +18,9 @@ jobs:
   backend:
     runs-on: ubuntu-latest
 
+    env:
+      DATABASE_URL: postgresql://postgres@localhost:5432/talentbridge_ci?schema=public
+
     defaults:
       run:
         working-directory: server

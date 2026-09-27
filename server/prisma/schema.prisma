@@ -1,0 +1,337 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  RECRUITER
+  TPO
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum EducationLevel {
+  SSC
+  HSC
+  DIPLOMA
+  BACHELORS
+  MASTERS
+  PHD
+}
+
+enum ExperienceType {
+  INTERNSHIP
+  FULL_TIME
+  PART_TIME
+  FREELANCE
+}
+
+enum ResumeStatus {
+  UPLOADED
+  ANALYZING
+  ANALYZED
+  FAILED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(STUDENT)
+
+  isVerified   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  student      StudentProfile?
+  recruiter    RecruiterProfile?
+  tpo           TPOProfile?
+}
+
+model StudentProfile {
+  id                String   @id @default(uuid())
+
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  firstName         String?
+  middleName        String?
+  lastName          String?
+
+  dateOfBirth       DateTime?
+  gender            Gender?
+
+  profilePhoto      String?
+
+  phone             String?
+  alternatePhone    String?
+
+  nationality       String?
+  domicileState     String?
+
+  bio               String?
+
+  collegeName       String?
+  universityName    String?
+  branch            String?
+  enrollmentNumber  String?
+  graduationYear    Int?
+
+  profileCompleted  Int      @default(0)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  addresses         Address[]
+  educations        Education[]
+  skills            StudentSkill[]
+  projects          Project[]
+  experiences       Experience[]
+  certifications    Certification[]
+  achievements      Achievement[]
+  socialLinks       SocialLink[]
+  resumes           Resume[]
+  preferences       PlacementPreference?
+}
+
+model Address {
+  id          String @id @default(uuid())
+
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  country      String?
+  pincode      String?
+
+  isPermanent  Boolean @default(false)
+  isCurrent    Boolean @default(false)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Education {
+  id             String @id @default(uuid())
+
+  studentId      String
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  level          EducationLevel
+
+  institution    String?
+  board          String?
+  university     String?
+  course         String?
+  specialization String?
+
+  startYear      Int?
+  endYear        Int?
+
+  percentage     Float?
+  cgpa           Float?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Skill {
+  id          String @id @default(uuid())
+
+  name        String @unique
+  category    String?
+
+  students    StudentSkill[]
+
+  createdAt   DateTime @default(now())
+}
+
+model StudentSkill {
+  id          String @id @default(uuid())
+
+  studentId   String
+  skillId     String
+
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  skill       Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  proficiency Int?
+
+  createdAt   DateTime @default(now())
+
+  @@unique([studentId, skillId])
+}
+
+model Project {
+  id             String @id @default(uuid())
+
+  studentId      String
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  title          String
+  description    String?
+
+  technologies   String[]
+  githubUrl      String?
+  liveUrl        String?
+
+  startDate      DateTime?
+  endDate        DateTime?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Experience {
+  id            String @id @default(uuid())
+
+  studentId     String
+  student       StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  type          ExperienceType
+
+  companyName   String
+  role          String?
+
+  description   String?
+
+  startDate     DateTime?
+  endDate       DateTime?
+
+  isCurrent     Boolean @default(false)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Certification {
+  id             String @id @default(uuid())
+
+  studentId      String
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  name           String
+  issuingOrg     String?
+  credentialId   String?
+  credentialUrl  String?
+  issueDate      DateTime?
+  expiryDate     DateTime?
+
+  createdAt      DateTime @default(now())
+}
+
+model Achievement {
+  id          String @id @default(uuid())
+
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  date        DateTime?
+
+  createdAt   DateTime @default(now())
+}
+
+model SocialLink {
+  id          String @id @default(uuid())
+
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  platform    String
+  url         String
+
+  createdAt   DateTime @default(now())
+
+  @@unique([studentId, platform])
+}
+
+model Resume {
+  id          String @id @default(uuid())
+
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  fileUrl     String
+  fileName    String?
+
+  status      ResumeStatus @default(UPLOADED)
+
+  atsScore    Float?
+
+  uploadedAt  DateTime @default(now())
+  analyzedAt  DateTime?
+}
+
+model PlacementPreference {
+  id             String @id @default(uuid())
+
+  studentId      String @unique
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  preferredRoles String[]
+  preferredLocations String[]
+
+  expectedSalaryMin Float?
+  expectedSalaryMax Float?
+
+  willingToRelocate Boolean @default(false)
+
+  preferredWorkMode String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RecruiterProfile {
+  id          String @id @default(uuid())
+
+  userId      String @unique
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String?
+  designation String?
+  companyName String?
+  phone       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TPOProfile {
+  id           String @id @default(uuid())
+
+  userId       String @unique
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name         String?
+  designation  String?
+  department   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

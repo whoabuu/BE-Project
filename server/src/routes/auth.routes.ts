@@ -9,16 +9,42 @@ import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 
+async function getNextStudentCode(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+): Promise<string> {
+  const rows = await tx.$queryRaw<{ next_id: bigint }[]>`
+    SELECT nextval('student_code_seq') AS next_id
+  `;
+
+  const nextId = Number(rows[0]?.next_id);
+
+  if (!Number.isInteger(nextId) || nextId < 1001) {
+    throw new Error("Unable to generate a valid student ID");
+  }
+
+  return `STD${nextId}`;
+};
+
 /**
  * POST /api/auth/register
  *
  * Creates a new student account and an empty student profile.
+ *
+ * A permanent human-readable ID is generated automatically:
+ *
+ * STD1001
+ * STD1002
+ * STD1003
+ * ...
  */
 router.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (typeof email !== "string" || typeof password !== "string") {
+    if (
+      typeof email !== "string" ||
+      typeof password !== "string"
+    ) {
       res.status(400).json({
         message: "Email and password are required",
       });
@@ -56,25 +82,41 @@ router.post("/register", async (req, res) => {
 
     const passwordHash = await hashPassword(password);
 
-    const user = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        passwordHash,
-        role: "STUDENT",
+    const user = await prisma.$transaction(async (tx) => {
+      const studentCode = await getNextStudentCode(tx);
 
-        student: {
-          create: {},
+      return tx.user.create({
+        data: {
+          email: normalizedEmail,
+          passwordHash,
+          role: "STUDENT",
+
+          student: {
+            create: {
+              studentCode,
+              verificationStatus: "PENDING",
+            },
+          },
         },
-      },
 
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        isVerified: true,
-        isActive: true,
-        createdAt: true,
-      },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          isVerified: true,
+          isActive: true,
+          createdAt: true,
+
+          student: {
+            select: {
+              id: true,
+              studentCode: true,
+              profileCompleted: true,
+              verificationStatus: true,
+            },
+          },
+        },
+      });
     });
 
     const token = signAccessToken(user);
@@ -95,14 +137,15 @@ router.post("/register", async (req, res) => {
 
 /**
  * POST /api/auth/login
- *
- * Authenticates an existing user.
  */
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (typeof email !== "string" || typeof password !== "string") {
+    if (
+      typeof email !== "string" ||
+      typeof password !== "string"
+    ) {
       res.status(400).json({
         message: "Email and password are required",
       });
@@ -124,6 +167,18 @@ router.post("/login", async (req, res) => {
         isVerified: true,
         isActive: true,
         createdAt: true,
+
+        student: {
+          select: {
+            id: true,
+            studentCode: true,
+            firstName: true,
+            lastName: true,
+            profileCompleted: true,
+            verificationStatus: true,
+            verificationNote: true,
+          },
+        },
       },
     });
 
@@ -166,6 +221,7 @@ router.post("/login", async (req, res) => {
         isVerified: user.isVerified,
         isActive: user.isActive,
         createdAt: user.createdAt,
+        student: user.student,
       },
     });
   } catch (error) {
@@ -179,8 +235,6 @@ router.post("/login", async (req, res) => {
 
 /**
  * GET /api/auth/me
- *
- * Returns the currently authenticated user's account.
  */
 router.get("/me", requireAuth, async (req, res) => {
   try {
@@ -200,10 +254,14 @@ router.get("/me", requireAuth, async (req, res) => {
         student: {
           select: {
             id: true,
+            studentCode: true,
             firstName: true,
             lastName: true,
             profilePhoto: true,
             profileCompleted: true,
+            verificationStatus: true,
+            verificationNote: true,
+            verifiedAt: true,
           },
         },
 

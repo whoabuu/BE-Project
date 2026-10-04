@@ -1,19 +1,67 @@
 import { prisma } from "../lib/prisma";
 
-export async function updateProfileCompletion(studentId: string): Promise<number> {
+function hasText(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+export async function updateProfileCompletion(
+  studentId: string
+): Promise<number> {
   const student = await prisma.studentProfile.findUnique({
-    where: { id: studentId },
+    where: {
+      id: studentId,
+    },
     include: {
-      educations: { select: { id: true } },
-      skills: { select: { id: true } },
-      projects: { select: { id: true } },
-      experiences: { select: { id: true } },
-      certifications: { select: { id: true } },
-      achievements: { select: { id: true } },
-      addresses: { select: { id: true } },
-      resumes: { select: { id: true } },
-      socialLinks: { select: { id: true } },
-      preferences: { select: { id: true } },
+      addresses: {
+        select: {
+          id: true,
+          addressLine1: true,
+          city: true,
+          state: true,
+          pincode: true,
+        },
+      },
+
+      educations: {
+        select: {
+          id: true,
+          level: true,
+          institution: true,
+          course: true,
+        },
+      },
+
+      skills: {
+        select: {
+          id: true,
+          skill: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+
+      projects: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+
+      resumes: {
+        select: {
+          id: true,
+          fileUrl: true,
+        },
+      },
+
+      preferences: {
+        select: {
+          id: true,
+          preferredRoles: true,
+        },
+      },
     },
   });
 
@@ -21,27 +69,92 @@ export async function updateProfileCompletion(studentId: string): Promise<number
     throw new Error("Student profile not found");
   }
 
-  // These are the fields needed for a placement-ready profile.
-  // Experience, certifications, achievements and social links are optional and
-  // therefore do not block completion for a fresher.
-  const checks = [
-    Boolean(student.firstName && student.lastName && student.phone),
-    Boolean(student.dateOfBirth && student.gender),
-    Boolean(student.collegeName && student.branch && student.enrollmentNumber && student.graduationYear),
-    student.addresses.length > 0,
-    student.educations.length > 0,
-    student.skills.length > 0,
-    student.projects.length > 0,
-    student.resumes.length > 0,
-    Boolean(student.preferences),
+  /*
+   * Phase 2 has exactly 7 REQUIRED sections.
+   *
+   * Optional:
+   * - Experience
+   * - Certifications
+   * - Achievements
+   * - Social Links
+   *
+   * These must NEVER affect the completion percentage.
+   */
+
+  // 1. PERSONAL
+  const personalComplete =
+    hasText(student.firstName) &&
+    hasText(student.lastName) &&
+    hasText(student.phone) &&
+    Boolean(student.dateOfBirth) &&
+    Boolean(student.gender) &&
+    hasText(student.collegeName) &&
+    hasText(student.branch) &&
+    hasText(student.enrollmentNumber) &&
+    student.graduationYear !== null &&
+    student.graduationYear !== undefined;
+
+  // 2. ADDRESS
+  const addressComplete = student.addresses.some(
+    (address) =>
+      hasText(address.addressLine1) &&
+      hasText(address.city) &&
+      hasText(address.state) &&
+      hasText(address.pincode)
+  );
+
+  // 3. EDUCATION
+  const educationComplete = student.educations.some(
+    (education) =>
+      hasText(education.institution) &&
+      hasText(education.course)
+  );
+
+  // 4. SKILLS
+  const skillsComplete = student.skills.some(
+    (item) => hasText(item.skill?.name)
+  );
+
+  // 5. PROJECTS
+  const projectsComplete = student.projects.some(
+    (project) => hasText(project.title)
+  );
+
+  // 6. RESUME
+  const resumeComplete = student.resumes.some(
+    (resume) => hasText(resume.fileUrl)
+  );
+
+  // 7. PREFERENCES
+  const preferencesComplete =
+    Boolean(student.preferences) &&
+    Array.isArray(student.preferences?.preferredRoles) &&
+    student.preferences.preferredRoles.length > 0;
+
+  const requiredSections = [
+    personalComplete,
+    addressComplete,
+    educationComplete,
+    skillsComplete,
+    projectsComplete,
+    resumeComplete,
+    preferencesComplete,
   ];
 
-  const completed = checks.filter(Boolean).length;
-  const percentage = Math.round((completed / checks.length) * 100);
+  const completedSections =
+    requiredSections.filter(Boolean).length;
+
+  const percentage = Math.round(
+    (completedSections / requiredSections.length) * 100
+  );
 
   await prisma.studentProfile.update({
-    where: { id: studentId },
-    data: { profileCompleted: percentage },
+    where: {
+      id: studentId,
+    },
+    data: {
+      profileCompleted: percentage,
+    },
   });
 
   return percentage;

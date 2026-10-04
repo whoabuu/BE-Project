@@ -1,4 +1,8 @@
-export type Role = "STUDENT" | "TPO" | "RECRUITER";
+export type Role =
+  | "STUDENT"
+  | "RECRUITER"
+  | "TPO"
+  | "ADMIN";
 
 export interface User {
   id: string;

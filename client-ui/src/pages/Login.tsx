@@ -412,13 +412,11 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() =>
-                  navigate(
-                    "/register"
-                  )
+                  navigate(role === "TPO" ? "/tpo/register" : "/register")
                 }
                 className="ml-1 font-bold text-indigo-600 hover:text-indigo-700 hover:underline"
               >
-                Create one
+                {role === "TPO" ? "Create TPO account" : "Create one"}
               </button>
 
             </div>

@@ -10,6 +10,9 @@ import StudentProfileViewPage from "./pages/StudentProfileViewPage";
 import StudentDashboard from "./pages/StudentDashboard";
 import SettingsPage from "./pages/SettingsPage";
 import TPOStudentsPage from "./pages/TPOStudentsPage";
+import TPODashboard from "./pages/TPODashboard";
+import TPORegister from "./pages/TPORegister";
+import TPOStudentDetailsPage from "./pages/TPOStudentDetailsPage";
 
 import "./index.css";
 
@@ -293,6 +296,11 @@ export default function App() {
             element={<Register />}
           />
 
+          <Route
+            path="/tpo/register"
+            element={<TPORegister />}
+          />
+
 
           {/* =========================
               STUDENT ROUTES
@@ -355,12 +363,18 @@ export default function App() {
               <ProtectedRoute allowedRoles={["TPO"]} />
             }
           >
+            <Route
+              path="/tpo/students/:studentId"
+              element={<TPOStudentDetailsPage />}
+            />
             {tpoRoutes.map(([path, kind]) => (
               <Route
                 key={path}
                 path={path}
                 element={
-                  path === "/tpo/students" ? (
+                  path === "/tpo" ? (
+                    <TPODashboard />
+                  ) : path === "/tpo/students" ? (
                     <TPOStudentsPage />
                   ) : (
                     <PlatformPage kind={kind} />

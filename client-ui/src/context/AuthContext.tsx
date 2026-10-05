@@ -35,6 +35,10 @@ export interface AuthUser {
     lastName: string | null;
     profilePhoto: string | null;
     profileCompleted: number;
+    studentCode?: string;
+    verificationStatus?: "PENDING" | "VERIFIED" | "REJECTED";
+    verificationNote?: string | null;
+    verifiedAt?: string | null;
   } | null;
 
   recruiter?: {

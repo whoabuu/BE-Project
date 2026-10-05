@@ -1,37 +1,85 @@
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { Role } from "../generated/prisma/client";
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
+
   if (!secret) {
-    throw new Error("JWT_SECRET is not configured");
+    throw new Error("JWT_SECRET is not defined in .env");
   }
+
   return secret;
 }
 
-export function signAccessToken(user: { id: string; email: string; role: Role }): string {
+type AccessTokenPayload = {
+  id: string;
+  email: string;
+  role: Role;
+};
+
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 12);
+}
+
+export async function comparePassword(
+  password: string,
+  hashedPassword: string
+): Promise<boolean> {
+  return bcrypt.compare(password, hashedPassword);
+}
+
+export function signAccessToken(user: {
+  id: string;
+  email: string;
+  role: Role;
+}): string {
+  const secret = getJwtSecret();
+
   return jwt.sign(
-    { email: user.email, role: user.role },
-    getJwtSecret(),
-    { subject: user.id, expiresIn: "7d" }
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    },
+    secret,
+    {
+      expiresIn: "7d",
+    }
   );
 }
 
-export function verifyAccessToken(token: string): { id: string; email: string; role: Role } {
-  const payload = jwt.verify(token, getJwtSecret());
+export function verifyAccessToken(token: string): AccessTokenPayload {
+  const secret = getJwtSecret();
 
-  if (typeof payload === "string" || !payload.sub || typeof payload.email !== "string") {
+  const decoded = jwt.verify(token, secret);
+
+  if (typeof decoded !== "object" || decoded === null) {
     throw new Error("Invalid token payload");
   }
 
-  const role = payload.role;
-  if (role !== "STUDENT" && role !== "RECRUITER" && role !== "TPO" && role !== "ADMIN") {
-    throw new Error("Invalid token role");
+  const payload = decoded as Record<string, unknown>;
+
+  if (
+    typeof payload.id !== "string" ||
+    typeof payload.email !== "string" ||
+    typeof payload.role !== "string"
+  ) {
+    throw new Error("Invalid token payload");
+  }
+
+  if (
+    payload.role !== "STUDENT" &&
+    payload.role !== "RECRUITER" &&
+    payload.role !== "TPO" &&
+    payload.role !== "ADMIN"
+  ) {
+    throw new Error("Invalid user role");
   }
 
   return {
-    id: payload.sub,
+    id: payload.id,
     email: payload.email,
-    role,
+    role: payload.role as Role,
   };
 }

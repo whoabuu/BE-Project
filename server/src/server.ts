@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes";
 import studentRoutes from "./routes/student.routes";
+import tpoRoutes from "./routes/tpo.routes";
 import { prisma } from "./lib/prisma";
 
 const app = express();
@@ -18,7 +19,7 @@ if (!process.env.JWT_SECRET) {
 }
 
 app.use(cors({ origin: clientUrl }));
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", async (_req, res) => {
   try {
@@ -31,6 +32,7 @@ app.get("/health", async (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/students", studentRoutes);
+app.use("/api/tpo", tpoRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Route not found" });
@@ -41,9 +43,8 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   res.status(500).json({ message: "Internal server error" });
 });
 
-const server = app.listen(port, () => {
+const server = app.listen(port, async () => {
   console.log(`TalentBridge API running at http://localhost:${port}`);
-  console.log(`Health check: http://localhost:${port}/health`);
 });
 
 async function shutdown(signal: string): Promise<void> {

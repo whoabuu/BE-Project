@@ -6,6 +6,7 @@ import {
   signAccessToken,
 } from "../utils/auth";
 import { requireAuth } from "../middleware/auth";
+import { sendStudentWelcomeEmail } from "../services/email";
 
 const router = Router();
 
@@ -23,60 +24,33 @@ async function getNextStudentCode(
   }
 
   return `STD${nextId}`;
-};
+}
 
-/**
- * POST /api/auth/register
- *
- * Creates a new student account and an empty student profile.
- *
- * A permanent human-readable ID is generated automatically:
- *
- * STD1001
- * STD1002
- * STD1003
- * ...
- */
 router.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (
-      typeof email !== "string" ||
-      typeof password !== "string"
-    ) {
-      res.status(400).json({
-        message: "Email and password are required",
-      });
+    if (typeof email !== "string" || typeof password !== "string") {
+      res.status(400).json({ message: "Email and password are required" });
       return;
     }
 
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail) {
-      res.status(400).json({
-        message: "Email is required",
-      });
+      res.status(400).json({ message: "Email is required" });
       return;
     }
 
     if (password.length < 8) {
-      res.status(400).json({
-        message: "Password must be at least 8 characters long",
-      });
+      res.status(400).json({ message: "Password must be at least 8 characters long" });
       return;
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: {
-        email: normalizedEmail,
-      },
-    });
+    const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
     if (existingUser) {
-      res.status(409).json({
-        message: "An account with this email already exists",
-      });
+      res.status(409).json({ message: "An account with this email already exists" });
       return;
     }
 
@@ -90,7 +64,6 @@ router.post("/register", async (req, res) => {
           email: normalizedEmail,
           passwordHash,
           role: "STUDENT",
-
           student: {
             create: {
               studentCode,
@@ -98,7 +71,6 @@ router.post("/register", async (req, res) => {
             },
           },
         },
-
         select: {
           id: true,
           email: true,
@@ -106,7 +78,6 @@ router.post("/register", async (req, res) => {
           isVerified: true,
           isActive: true,
           createdAt: true,
-
           student: {
             select: {
               id: true,
@@ -119,6 +90,10 @@ router.post("/register", async (req, res) => {
       });
     });
 
+    void sendStudentWelcomeEmail(user.email, user.student!.studentCode).catch((error) => {
+      console.error("Student welcome email failed:", error);
+    });
+
     const token = signAccessToken(user);
 
     res.status(201).json({
@@ -128,37 +103,102 @@ router.post("/register", async (req, res) => {
     });
   } catch (error) {
     console.error("Registration error:", error);
-
-    res.status(500).json({
-      message: "Failed to create account",
-    });
+    res.status(500).json({ message: "Failed to create account" });
   }
 });
 
-/**
- * POST /api/auth/login
- */
+router.post("/tpo/register", async (req, res) => {
+  try {
+    const { email, password, name, designation, department, registrationKey } = req.body;
+
+    if (
+      typeof email !== "string" ||
+      typeof password !== "string" ||
+      typeof registrationKey !== "string"
+    ) {
+      res.status(400).json({ message: "Email, password and registration key are required" });
+      return;
+    }
+
+    if (!process.env.TPO_REGISTRATION_KEY || registrationKey !== process.env.TPO_REGISTRATION_KEY) {
+      res.status(403).json({ message: "Invalid TPO registration key" });
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || password.length < 8) {
+      res.status(400).json({ message: "A valid email and password of at least 8 characters are required" });
+      return;
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+    if (existingUser) {
+      res.status(409).json({ message: "An account with this email already exists" });
+      return;
+    }
+
+    const passwordHash = await hashPassword(password);
+
+    const user = await prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        passwordHash,
+        role: "TPO",
+        isVerified: true,
+        tpo: {
+          create: {
+            name: typeof name === "string" ? name.trim() || null : null,
+            designation: typeof designation === "string" ? designation.trim() || null : null,
+            department: typeof department === "string" ? department.trim() || null : null,
+          },
+        },
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isVerified: true,
+        isActive: true,
+        createdAt: true,
+        tpo: {
+          select: {
+            id: true,
+            name: true,
+            designation: true,
+            department: true,
+          },
+        },
+      },
+    });
+
+    const token = signAccessToken(user);
+
+    res.status(201).json({
+      message: "TPO account created successfully",
+      token,
+      user,
+    });
+  } catch (error) {
+    console.error("TPO registration error:", error);
+    res.status(500).json({ message: "Failed to create TPO account" });
+  }
+});
+
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (
-      typeof email !== "string" ||
-      typeof password !== "string"
-    ) {
-      res.status(400).json({
-        message: "Email and password are required",
-      });
+    if (typeof email !== "string" || typeof password !== "string") {
+      res.status(400).json({ message: "Email and password are required" });
       return;
     }
 
     const normalizedEmail = email.trim().toLowerCase();
 
     const user = await prisma.user.findUnique({
-      where: {
-        email: normalizedEmail,
-      },
-
+      where: { email: normalizedEmail },
       select: {
         id: true,
         email: true,
@@ -167,7 +207,6 @@ router.post("/login", async (req, res) => {
         isVerified: true,
         isActive: true,
         createdAt: true,
-
         student: {
           select: {
             id: true,
@@ -179,32 +218,39 @@ router.post("/login", async (req, res) => {
             verificationNote: true,
           },
         },
+        recruiter: {
+          select: {
+            id: true,
+            name: true,
+            designation: true,
+            companyName: true,
+          },
+        },
+        tpo: {
+          select: {
+            id: true,
+            name: true,
+            designation: true,
+            department: true,
+          },
+        },
       },
     });
 
     if (!user) {
-      res.status(401).json({
-        message: "Invalid email or password",
-      });
+      res.status(401).json({ message: "Invalid email or password" });
       return;
     }
 
     if (!user.isActive) {
-      res.status(403).json({
-        message: "Your account has been deactivated",
-      });
+      res.status(403).json({ message: "Your account has been deactivated" });
       return;
     }
 
-    const passwordMatches = await comparePassword(
-      password,
-      user.passwordHash
-    );
+    const passwordMatches = await comparePassword(password, user.passwordHash);
 
     if (!passwordMatches) {
-      res.status(401).json({
-        message: "Invalid email or password",
-      });
+      res.status(401).json({ message: "Invalid email or password" });
       return;
     }
 
@@ -213,7 +259,6 @@ router.post("/login", async (req, res) => {
     res.json({
       message: "Login successful",
       token,
-
       user: {
         id: user.id,
         email: user.email,
@@ -222,27 +267,20 @@ router.post("/login", async (req, res) => {
         isActive: user.isActive,
         createdAt: user.createdAt,
         student: user.student,
+        recruiter: user.recruiter,
+        tpo: user.tpo,
       },
     });
   } catch (error) {
     console.error("Login error:", error);
-
-    res.status(500).json({
-      message: "Failed to login",
-    });
+    res.status(500).json({ message: "Failed to login" });
   }
 });
 
-/**
- * GET /api/auth/me
- */
 router.get("/me", requireAuth, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
-      where: {
-        id: req.user!.id,
-      },
-
+      where: { id: req.user!.id },
       select: {
         id: true,
         email: true,
@@ -250,7 +288,6 @@ router.get("/me", requireAuth, async (req, res) => {
         isVerified: true,
         isActive: true,
         createdAt: true,
-
         student: {
           select: {
             id: true,
@@ -264,7 +301,6 @@ router.get("/me", requireAuth, async (req, res) => {
             verifiedAt: true,
           },
         },
-
         recruiter: {
           select: {
             id: true,
@@ -273,7 +309,6 @@ router.get("/me", requireAuth, async (req, res) => {
             companyName: true,
           },
         },
-
         tpo: {
           select: {
             id: true,
@@ -286,21 +321,14 @@ router.get("/me", requireAuth, async (req, res) => {
     });
 
     if (!user) {
-      res.status(404).json({
-        message: "User not found",
-      });
+      res.status(404).json({ message: "User not found" });
       return;
     }
 
-    res.json({
-      user,
-    });
+    res.json({ user });
   } catch (error) {
     console.error("Get current user error:", error);
-
-    res.status(500).json({
-      message: "Failed to retrieve user",
-    });
+    res.status(500).json({ message: "Failed to retrieve user" });
   }
 });
 

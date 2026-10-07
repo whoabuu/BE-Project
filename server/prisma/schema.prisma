@@ -51,11 +51,83 @@ enum ResumeStatus {
   FAILED
 }
 
+enum AssessmentType {
+  DSA
+  APTITUDE
+}
+
+enum AssessmentStatus {
+  DRAFT
+  GENERATED
+  VALIDATED
+  PUBLISHED
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum AssessmentQuestionType {
+  MCQ
+  CODING
+}
+
+enum AssessmentQuestionStatus {
+  GENERATED
+  VALIDATED
+  REJECTED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum AptitudeSection {
+  QUANTITATIVE
+  LOGICAL
+  VERBAL
+  TECHNICAL
+}
+
+enum AssessmentAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_SUBMITTED
+  TERMINATED
+}
+
+enum SubmissionReason {
+  MANUAL
+  TIME_EXPIRED
+  PROCTORING_VIOLATION
+}
+
+enum ProctoringEventType {
+  TAB_SWITCH
+  WINDOW_BLUR
+  VISIBILITY_CHANGE
+  FULLSCREEN_EXIT
+  CAMERA_LOST
+  MICROPHONE_LOST
+  OTHER
+}
+
+enum CodingSubmissionStatus {
+  PENDING
+  RUNNING
+  PASSED
+  FAILED
+  ERROR
+  TIME_LIMIT
+  MEMORY_LIMIT
+}
+
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String @id @default(uuid())
+  email        String @unique
   passwordHash String
-  role         Role     @default(STUDENT)
+  role         Role   @default(STUDENT)
 
   isVerified Boolean @default(false)
   isActive   Boolean @default(true)
@@ -108,16 +180,19 @@ model StudentProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  addresses       Address[]
-  educations      Education[]
-  skills          StudentSkill[]
-  projects        Project[]
-  experiences     Experience[]
-  certifications  Certification[]
-  achievements    Achievement[]
-  socialLinks     SocialLink[]
-  resumes         Resume[]
-  preferences     PlacementPreference?
+  addresses          Address[]
+  educations         Education[]
+  skills             StudentSkill[]
+  projects           Project[]
+  experiences        Experience[]
+  certifications     Certification[]
+  achievements       Achievement[]
+  socialLinks        SocialLink[]
+  resumes            Resume[]
+  preferences        PlacementPreference?
+  assessmentAttempts AssessmentAttempt[]
+
+  verifiedByTpo TPOProfile? @relation("TPOVerifiedStudents", fields: [verifiedByTpoId], references: [id], onDelete: SetNull)
 }
 
 model Address {
@@ -290,14 +365,14 @@ model Resume {
 
   atsScore Float?
 
-  uploadedAt DateTime @default(now())
+  uploadedAt DateTime  @default(now())
   analyzedAt DateTime?
 }
 
 model PlacementPreference {
   id String @id @default(uuid())
 
-  studentId String @unique
+  studentId String         @unique
   student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   preferredRoles     String[]
@@ -318,7 +393,7 @@ model RecruiterProfile {
   id String @id @default(uuid())
 
   userId String @unique
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name        String?
   designation String?
@@ -333,7 +408,7 @@ model TPOProfile {
   id String @id @default(uuid())
 
   userId String @unique
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name        String?
   designation String?
@@ -341,4 +416,197 @@ model TPOProfile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  verifiedStudents StudentProfile[] @relation("TPOVerifiedStudents")
+  assessments      Assessment[]
+}
+
+model AssessmentBlueprint {
+  id                 String            @id @default(uuid())
+  type               AssessmentType
+  title              String
+  description        String?
+  numberOfQuestions  Int
+  durationMinutes    Int
+  difficulty         Difficulty
+  aptitudeSections   AptitudeSection[]
+  dsaTopics          String[]
+  sourcePatterns     Json?
+  aiGenerationConfig Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  assessment Assessment?
+}
+
+model Assessment {
+  id              String           @id @default(uuid())
+  blueprintId     String           @unique
+  createdByTpoId  String
+  type            AssessmentType
+  title           String
+  description     String?
+  durationMinutes Int
+  difficulty      Difficulty
+  status          AssessmentStatus @default(DRAFT)
+  instructions    String?
+  startsAt        DateTime?
+  endsAt          DateTime?
+  publishedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  blueprint    AssessmentBlueprint  @relation(fields: [blueprintId], references: [id], onDelete: Restrict)
+  createdByTpo TPOProfile           @relation(fields: [createdByTpoId], references: [id], onDelete: Restrict)
+  questions    AssessmentQuestion[]
+  attempts     AssessmentAttempt[]
+
+  @@index([createdByTpoId])
+  @@index([status])
+  @@index([type])
+}
+
+model AssessmentQuestion {
+  id             String                   @id @default(uuid())
+  assessmentId   String
+  questionNumber Int
+  type           AssessmentQuestionType
+  section        AptitudeSection?
+  difficulty     Difficulty
+  title          String
+  description    String?
+  options        Json?
+  correctAnswer  Json?
+  explanation    String?
+  codingLanguage String?
+  starterCode    Json?
+  constraints    String?
+  topics         String[]
+  sourceMetadata Json?
+  status         AssessmentQuestionStatus @default(GENERATED)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  assessment  Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  testCases   TestCase[]
+  answers     AssessmentAnswer[]
+  submissions CodingSubmission[]
+
+  @@unique([assessmentId, questionNumber])
+  @@index([assessmentId])
+  @@index([type])
+  @@index([section])
+}
+
+model TestCase {
+  id             String   @id @default(uuid())
+  questionId     String
+  input          Json
+  expectedOutput Json
+  isHidden       Boolean  @default(true)
+  weight         Float    @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  question AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+}
+
+model AssessmentAttempt {
+  id                 String                  @id @default(uuid())
+  assessmentId       String
+  studentId          String
+  status             AssessmentAttemptStatus
+  submissionReason   SubmissionReason?
+  startedAt          DateTime?
+  submittedAt        DateTime?
+  expiresAt          DateTime?
+  score              Float?
+  maxScore           Float?
+  percentage         Float?
+  proctoringWarnings Int                     @default(0)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  assessment        Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student           StudentProfile     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers           AssessmentAnswer[]
+  codingSubmissions CodingSubmission[]
+  proctoringSession ProctoringSession?
+
+  @@unique([assessmentId, studentId])
+  @@index([studentId])
+  @@index([assessmentId])
+  @@index([status])
+}
+
+model AssessmentAnswer {
+  id         String    @id @default(uuid())
+  attemptId  String
+  questionId String
+  answer     Json?
+  isCorrect  Boolean?
+  score      Float?
+  answeredAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  attempt  AssessmentAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+}
+
+model CodingSubmission {
+  id              String                 @id @default(uuid())
+  attemptId       String
+  questionId      String
+  language        String
+  sourceCode      String
+  status          CodingSubmissionStatus @default(PENDING)
+  score           Float?
+  executionTimeMs Int?
+  memoryKb        Int?
+  compilerOutput  String?
+  submittedAt     DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  attempt  AssessmentAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
+  @@index([questionId])
+}
+
+model ProctoringSession {
+  id                String    @id @default(uuid())
+  attemptId         String    @unique
+  cameraGranted     Boolean   @default(false)
+  microphoneGranted Boolean   @default(false)
+  fullscreenActive  Boolean   @default(false)
+  warningCount      Int       @default(0)
+  startedAt         DateTime?
+  endedAt           DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  attempt AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  events  ProctoringEvent[]
+}
+
+model ProctoringEvent {
+  id         String              @id @default(uuid())
+  sessionId  String
+  type       ProctoringEventType
+  metadata   Json?
+  occurredAt DateTime            @default(now())
+  createdAt  DateTime            @default(now())
+
+  session ProctoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([occurredAt])
 }

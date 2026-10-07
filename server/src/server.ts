@@ -1,59 +1,171 @@
 import "dotenv/config";
+
 import express from "express";
 import cors from "cors";
+
 import authRoutes from "./routes/auth.routes";
 import studentRoutes from "./routes/student.routes";
 import tpoRoutes from "./routes/tpo.routes";
+import tpoAssessmentRoutes from "./routes/tpo-assessment.routes";
+import tpoAssessmentGenerationRoutes from "./routes/tpo-assessment-generation.routes";
+import tpoAssessmentValidationRoutes from "./routes/tpo-assessment-validation.routes";
+import tpoAssessmentPublishingRoutes from "./routes/tpo-assessment-publishing.routes";
+
 import { prisma } from "./lib/prisma";
 
 const app = express();
-const port = Number(process.env.PORT ?? 5001);
-const clientUrl = process.env.CLIENT_URL ?? "http://localhost:5173";
+
+const port = Number(
+  process.env.PORT ?? 5001
+);
+
+const clientUrl =
+  process.env.CLIENT_URL ??
+  "http://localhost:5173";
 
 if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not configured");
+  throw new Error(
+    "DATABASE_URL is not configured"
+  );
 }
 
 if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET is not configured");
+  throw new Error(
+    "JWT_SECRET is not configured"
+  );
 }
 
-app.use(cors({ origin: clientUrl }));
-app.use(express.json({ limit: "8mb" }));
+app.use(
+  cors({
+    origin: clientUrl,
+  })
+);
 
-app.get("/health", async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "ok", database: "connected" });
-  } catch {
-    res.status(503).json({ status: "error", database: "disconnected" });
+app.use(
+  express.json({
+    limit: "8mb",
+  })
+);
+
+app.get(
+  "/health",
+  async (_req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+
+      res.json({
+        status: "ok",
+        database: "connected",
+      });
+    } catch {
+      res.status(503).json({
+        status: "error",
+        database: "disconnected",
+      });
+    }
   }
-});
+);
 
-app.use("/api/auth", authRoutes);
-app.use("/api/students", studentRoutes);
-app.use("/api/tpo", tpoRoutes);
+app.use(
+  "/api/auth",
+  authRoutes
+);
 
-app.use((_req, res) => {
-  res.status(404).json({ message: "Route not found" });
-});
+app.use(
+  "/api/students",
+  studentRoutes
+);
 
-app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error("Unhandled server error", error);
-  res.status(500).json({ message: "Internal server error" });
-});
+app.use(
+  "/api/tpo",
+  tpoRoutes
+);
 
-const server = app.listen(port, async () => {
-  console.log(`TalentBridge API running at http://localhost:${port}`);
-});
+/*
+ * TPO Assessment Configuration
+ *
+ * Mounted separately from the existing TPO
+ * student-verification routes.
+ */
+app.use(
+  "/api/tpo/assessments",
+  tpoAssessmentRoutes
+);
 
-async function shutdown(signal: string): Promise<void> {
-  console.log(`${signal} received. Shutting down...`);
-  server.close(async () => {
-    await prisma.$disconnect();
-    process.exit(0);
-  });
+app.use(
+  "/api/tpo/assessments",
+  tpoAssessmentGenerationRoutes
+);
+
+app.use(
+  "/api/tpo/assessments",
+  tpoAssessmentValidationRoutes
+);
+
+app.use(
+  "/api/tpo/assessments",
+  tpoAssessmentPublishingRoutes
+);
+
+app.use(
+  (_req, res) => {
+    res.status(404).json({
+      message: "Route not found",
+    });
+  }
+);
+
+app.use(
+  (
+    error: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction
+  ) => {
+    console.error(
+      "Unhandled server error",
+      error
+    );
+
+    res.status(500).json({
+      message:
+        "Internal server error",
+    });
+  }
+);
+
+const server =
+  app.listen(
+    port,
+    async () => {
+      console.log(
+        `TalentBridge API running at http://localhost:${port}`
+      );
+    }
+  );
+
+async function shutdown(
+  signal: string
+): Promise<void> {
+  console.log(
+    `${signal} received. Shutting down...`
+  );
+
+  server.close(
+    async () => {
+      await prisma.$disconnect();
+
+      process.exit(0);
+    }
+  );
 }
 
-process.on("SIGINT", () => void shutdown("SIGINT"));
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on(
+  "SIGINT",
+  () => void shutdown("SIGINT")
+);
+
+process.on(
+  "SIGTERM",
+  () => void shutdown("SIGTERM")
+);

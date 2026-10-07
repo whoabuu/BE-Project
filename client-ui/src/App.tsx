@@ -13,6 +13,9 @@ import TPOStudentsPage from "./pages/TPOStudentsPage";
 import TPODashboard from "./pages/TPODashboard";
 import TPORegister from "./pages/TPORegister";
 import TPOStudentDetailsPage from "./pages/TPOStudentDetailsPage";
+import TPOAssessmentsPage from "./pages/TPOAssessmentsPage";
+import TPOAssessmentCreatePage from "./pages/TPOAssessmentCreatePage";
+import TPOAssessmentDetailsPage from "./pages/TPOAssessmentDetailsPage";
 
 import "./index.css";
 
@@ -367,6 +370,14 @@ export default function App() {
               path="/tpo/students/:studentId"
               element={<TPOStudentDetailsPage />}
             />
+            <Route
+              path="/tpo/assessments/create"
+              element={<TPOAssessmentCreatePage />}
+            />
+            <Route
+              path="/tpo/assessments/:assessmentId"
+              element={<TPOAssessmentDetailsPage />}
+            />
             {tpoRoutes.map(([path, kind]) => (
               <Route
                 key={path}
@@ -376,6 +387,8 @@ export default function App() {
                     <TPODashboard />
                   ) : path === "/tpo/students" ? (
                     <TPOStudentsPage />
+                  ) : path === "/tpo/assessments" ? (
+                    <TPOAssessmentsPage />
                   ) : (
                     <PlatformPage kind={kind} />
                   )
